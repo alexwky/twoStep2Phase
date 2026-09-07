@@ -6,4 +6,4 @@
 The package consists of:
 
 - data generators for the linear, logistic, and Cox models;
-- one analysis function per outcome family. We perform the kernel-based optimal update approach and the joint update approach.
+- one analysis function per outcome family, which performs the kernel-based optimal update approach and the joint update approach.
