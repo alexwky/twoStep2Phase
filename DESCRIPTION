@@ -25,3 +25,5 @@ Suggests: MASS, testthat (>= 3.0.0)
 Config/testthat/edition: 3
 NeedsCompilation: yes
 Packaged: 2026-09-05 08:12:20 UTC
+URL: https://github.com/alexwky/twoStep2Phase
+BugReports: https://github.com/alexwky/twoStep2Phase/issues
