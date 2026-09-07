@@ -1,0 +1,345 @@
+\name{update_linear}
+\alias{update_linear}
+\alias{update_logistic}
+\alias{update_cox}
+\title{Update Estimation for Two-Phase Data}
+\usage{
+update_linear(data,
+  z = grep("^Z[0-9]+$", names(data), value = TRUE), y = "Y",
+  x = "X", x_star = "X_star", complete = "R", stratum = NULL,
+  x_models = NULL, h = NULL, initial = NULL,
+  n_quad = 30L, nboot = 0, seed = NULL,
+  var_method = "standard")
+
+update_logistic(data,
+  z = grep("^Z[0-9]+$", names(data), value = TRUE), y = "Y",
+  x = "X", x_star = "X_star", complete = "R", stratum = NULL,
+  x_models = NULL, h = NULL, initial = NULL,
+  tune_para = 0.01, nboot_tune = 50L,
+  n_quad = 30L, nboot = 0, seed = NULL,
+  var_method = "standard")
+
+update_cox(data,
+  z = grep("^Z[0-9]+$", names(data), value = TRUE), time = "Y",
+  event = "D", x = "X", x_star = "X_star", complete = "R",
+  stratum = NULL, x_models = NULL,
+  h = NULL, initial = NULL, n_quad = 30L, nboot = 0, seed = NULL,
+  var_method = "standard")
+}
+\arguments{
+\item{data}{Data frame containing the full Phase I sample, the Phase II
+selection indicator, and the observed Phase II values of the expensive
+covariate.}
+\item{z}{Character vector containing the names of the cheap-covariate
+columns. By default, columns whose names consist of \code{"Z"} followed by
+one or more digits, such as \code{"Z1"} and \code{"Z2"}, are selected
+automatically. Use \code{NULL} or \code{character(0)} for an outcome model
+without cheap covariates.}
+\item{y}{Name of the outcome column for linear and logistic models. The
+default is \code{"Y"}.}
+\item{time}{Name of the column containing the observed event or censoring
+time for the Cox model. The default is \code{"Y"}.}
+\item{event}{Name of the event-indicator column for the Cox model, coded 1
+for an event and 0 for censoring. The default is \code{"D"}.}
+\item{x}{Name of the expensive-covariate column. The default is \code{"X"}.}
+\item{x_star}{Name of the Phase I auxiliary-variable column for \code{x}.
+The default is \code{"X_star"}.}
+\item{complete}{Name of the Phase II selection-indicator column, coded 1
+when \code{x} is observed and 0 otherwise. The default is \code{"R"}.}
+\item{stratum}{Name of the sampling-stratum column for outcome-dependent
+Phase II sampling. The inverse-probability weight within each stratum is
+estimated as the full-sample stratum size divided by its Phase II sample
+size. If \code{NULL}, all subjects are treated as belonging to one stratum.
+For outcome-dependent data produced by the package generators, specify
+\code{stratum = "stratum"}.}
+\item{x_models}{Working models for the conditional distribution of
+\code{x} given \code{x_star} and, when present, \code{z}.
+
+Without \code{z}, the available value is \code{"kernel"}, which estimates
+the conditional distribution of \code{x} given \code{x_star}
+nonparametrically. With one or more \code{z} columns, the available values
+are \code{"linear"} and \code{"gam"}. The former uses a linear Gaussian
+working model for \code{x} given \code{x_star} and \code{z}; the latter
+uses a Gaussian generalized additive working model with additive smooth
+effects of \code{x_star} and the components of \code{z}. Supply
+\code{c("linear", "gam")} to use both.
+
+Use \code{NULL} to omit these optional conditional-\code{x} updates. The
+complete-case analysis and default update are still computed. The default
+is \code{"kernel"} without \code{z} and \code{"linear"} with \code{z}.}
+\item{h}{Kernel bandwidth used when \code{x_models = "kernel"}. If
+\code{NULL}, the bandwidth is selected using Silverman's rule of thumb
+based on \code{x_star} in the Phase II sample.}
+\item{initial}{Numerical values used to initialize the solution of the working
+estimating equations for the optional update methods.
+
+Without \code{z}, when \code{x_models = "kernel"}, supply two finite numbers
+in increasing order. These give the initial search interval for the scalar
+coefficient. If \code{initial = NULL}, the interval is formed by adding
+\code{c(-0.3, 0.3)} to the complete-case estimate.
+
+With one or more \code{z} variables, supply
+\eqn{\operatorname{length}(z) + 1}{length(z) + 1} finite starting values,
+ordered according to \code{x} followed by the variables in \code{z}. The same
+starting values are used for the Phase II and full-sample estimating equations
+under every requested linear or GAM working model. If \code{initial = NULL}, the
+complete-case coefficient estimates are used.
+
+\code{initial} is not used when the optional conditional-\code{x} updates are
+omitted.}
+\item{n_quad}{Number of Gauss-Hermite quadrature nodes used to approximate
+integrals when \code{x_models} includes \code{"linear"} or \code{"gam"}.}
+\item{tune_para}{Vector of non-negative candidate values for the
+\eqn{L_2}{L2} penalty used to regularize the logistic working estimating
+equations. If one value is supplied, it is used directly. If multiple values
+are supplied, the bootstrap selection procedure described in the article is
+used to select among them.}
+\item{nboot_tune}{Number of bootstrap samples used to select among multiple
+values of \code{tune_para}. It is ignored when only one value is supplied.}
+\item{nboot}{Number of bootstrap samples used for standard-error or
+covariance estimation. With \code{var_method = "standard"}, use 0 to omit
+standard-error estimation or a whole number of at least 2. With
+\code{var_method = "full_bootstrap"}, \code{nboot} must be greater than the
+number of components in the largest working-estimator contrast
+\eqn{\widetilde{\vartheta}_S-\widetilde{\vartheta}_F}{
+vartheta_S - vartheta_F} used in any requested update.}
+\item{seed}{Optional random seed set at the beginning of the analysis. It
+affects logistic tuning-parameter selection, cross-validation for the ridge
+update projection, and bootstrap calculations.}
+\item{var_method}{Method used to estimate the covariance quantities required
+for the update and its standard error. With \code{"standard"}, the update
+projection is estimated from subject-level influence-function quantities,
+using ridge regression where applicable, and the standard error is estimated
+by repeating the complete update procedure on bootstrap samples.
+
+With \code{"full_bootstrap"}, the covariance matrices
+\eqn{\Sigma_{11}}, \eqn{\Sigma_{12}}, and \eqn{\Sigma_{22}} are estimated
+jointly from bootstrap replicates of
+\eqn{(\widehat{\theta}_S,
+\widetilde{\vartheta}_S-\widetilde{\vartheta}_F)}{
+(theta_S, vartheta_S - vartheta_F)}. These estimates are used for both the
+update projection and the closed-form standard error.}
+}
+\description{
+Fit complete-case and two-step update estimators for linear, logistic, or Cox
+proportional hazards models using two-phase data. The expensive covariate
+\code{x} is observed only for subjects selected into Phase II, whereas the
+outcome, \code{x_star}, and the cheap covariates \code{z} are observed in
+the full sample.
+
+Every analysis computes the complete-case estimator and the default update
+estimator. Optional kernel, linear, or generalized additive working models
+for the conditional distribution of \code{x} can be used to construct
+additional update estimators.
+}
+\details{
+The complete-case estimator, labelled \code{complete_case}, is computed from
+the Phase II observations. When \code{stratum} is supplied, it is an
+inverse-probability weighted estimator using the empirically estimated
+stratum-specific sampling probabilities.
+
+An update estimator has the form
+\deqn{\widehat{\theta} =
+\widehat{\theta}_S-\widehat{\Sigma}_{12}\widehat{\Sigma}_{22}^{-1}
+(\widetilde{\vartheta}_S-\widetilde{\vartheta}_F),}{
+theta_hat = theta_S - Sigma_12 Sigma_22^(-1)
+(vartheta_S - vartheta_F),}
+where \eqn{\widehat{\theta}_S}{theta_S} is the complete-case estimator and
+\eqn{\widetilde{\vartheta}_S-\widetilde{\vartheta}_F}{
+vartheta_S - vartheta_F} is a working-estimator contrast obtained from the
+Phase II and full samples.
+
+The \code{default} update uses the same model family as the outcome model,
+with \code{x_star} replacing \code{x} and with \code{z} retained. The
+optional method labels have the following meanings:
+\itemize{
+\item \code{kernel}: kernel-based update using a nonparametric model for
+\code{x} given \code{x_star};
+\item \code{linear}: update using a linear Gaussian working model for
+\code{x} given \code{x_star} and \code{z};
+\item \code{joint_linear}: joint update combining the default and linear
+working-estimator contrasts;
+\item \code{gam}: update using a Gaussian generalized additive working model
+for \code{x} given \code{x_star} and \code{z}; and
+\item \code{joint_gam}: joint update combining the default and GAM
+working-estimator contrasts.
+}
+If both \code{"linear"} and \code{"gam"} are requested, both individual
+updates and both corresponding joint updates are returned.
+
+}
+\value{
+An object containing:
+\itemize{
+\item \code{call}: the matched function call;
+\item \code{family}: the outcome-model family;
+\item \code{estimate}: point estimates for every coefficient and analysis
+method;
+\item \code{se}: corresponding standard-error estimates when requested;
+\item \code{results}: a printable data frame containing the method,
+coefficient, estimate, and standard error;
+\item \code{details}: calculation details, including the empirical
+inverse-probability weights, requested working models, sampling-stratum
+specification, quadrature setting, and bootstrap information; and
+\item \code{tune_parameters}: calculated or selected tuning quantities,
+including the kernel bandwidth and logistic penalty parameter when applicable.
+}
+
+Without \code{z}, \code{estimate} is a named vector. With one or more
+\code{z} columns, it is a matrix whose rows correspond to \code{x} followed
+by the variables in \code{z}, and whose columns correspond to the analysis
+methods. When standard errors are not requested, they are displayed as
+\code{NA} in \code{results}.
+}
+\examples{
+library(twoStep2Phase)
+
+##### Examples of optimal update estimation
+
+## Linear model
+
+N = 1000
+n = 400
+beta = 0.5
+p = length(beta)
+mu = rep(0,p)
+sigma = diag(p)
+sde = 0.5
+ns = c(120,280)
+sdy = 0.5
+qq = 0.7
+
+data = generate_linear_data(N, n, beta, mu, sigma, sde, sdy, ns, qq)
+
+res = update_linear(data, z = NULL, y = "Y",
+                    x = "X", x_star = "X_star", complete = "R", stratum = "stratum",
+                    x_models = "kernel", h = NULL, initial = NULL,
+                    n_quad = 30L, nboot = 0, seed = NULL,
+                    var_method = "standard")
+
+res$results
+
+
+
+## Logistic model
+
+N = 1000
+n = 400
+beta = 0.5
+p = length(beta)
+mu = rep(0,p)
+sigma = diag(p)
+sde = 0.5
+ns = c(120,280)
+
+data = generate_logistic_data(N, n, beta, mu, sigma, sde, ns)
+
+res = update_logistic(data, z = NULL, y = "Y",
+                      x = "X", x_star = "X_star", complete = "R", stratum = "stratum",
+                      x_models = "kernel", h = NULL, initial = NULL,
+                      tune_para = 0.01, nboot_tune = 50L,
+                      n_quad = 30L, nboot = 0, seed = NULL,
+                      var_method = "standard")
+
+res$results
+
+
+
+## Cox model
+
+N = 1000
+n = 400
+beta = 0.5
+p = length(beta)
+mu = rep(0,p)
+sigma = diag(p)
+sde = 0.5
+ns = c(120,280)
+tau = 2.5
+
+data = generate_cox_data(N, n, beta, mu, sigma, sde, tau, ns)
+
+res = update_cox(data, z = NULL, time = "Y",
+                 event = "D", x = "X", x_star = "X_star", complete = "R",
+                 stratum = "stratum", x_models = "kernel", h = NULL, initial = NULL,
+                 n_quad = 30L, nboot = 0, seed = NULL,
+                 var_method = "standard")
+
+res$results
+
+
+
+
+##### Examples of joint update estimation
+
+## Linear model
+
+N = 1000
+n = 400
+beta = c(1,0.5)
+p = length(beta)
+mu = rep(0,p)
+sigma = diag(p)
+sde = 0.5
+ns = c(120,280)
+sdy = 0.5
+qq = 0.7
+
+data = generate_linear_data(N, n, beta, mu, sigma, sde, sdy, ns, qq)
+
+res = update_linear(data, z = grep("^Z[0-9]+$", names(data), value = TRUE), y = "Y",
+                    x = "X", x_star = "X_star", complete = "R", stratum = "stratum",
+                    x_models = c("linear","gam"), h = NULL, initial = NULL,
+                    n_quad = 30L, nboot = 0, seed = NULL,
+                    var_method = "standard")
+
+res$results
+
+
+
+## Logistic model
+
+N = 1000
+n = 400
+beta = c(1,0.5)
+p = length(beta)
+mu = rep(0,p)
+sigma = diag(p)
+sde = 0.5
+ns = c(120,280)
+
+data = generate_logistic_data(N, n, beta, mu, sigma, sde, ns)
+
+res = update_logistic(data, z = grep("^Z[0-9]+$", names(data), value = TRUE), y = "Y",
+                      x = "X", x_star = "X_star", complete = "R", stratum = "stratum",
+                      x_models = c("linear","gam"), h = NULL, initial = NULL,
+                      tune_para = 0.01, nboot_tune = 50L,
+                      n_quad = 30L, nboot = 0, seed = NULL,
+                      var_method = "standard")
+
+res$results
+
+
+
+## Cox model
+
+N = 1000
+n = 400
+beta = c(1,0.5)
+p = length(beta)
+mu = rep(0,p)
+sigma = diag(p)
+sde = 0.5
+ns = c(120,280)
+tau = 2.5
+
+data = generate_cox_data(N, n, beta, mu, sigma, sde, tau, ns)
+
+res = update_cox(data, z = grep("^Z[0-9]+$", names(data), value = TRUE), time = "Y",
+                 event = "D", x = "X", x_star = "X_star", complete = "R",
+                 stratum = "stratum", x_models = c("linear","gam"), h = NULL, initial = NULL,
+                 n_quad = 30L, nboot = 0, seed = NULL,
+                 var_method = "standard")
+
+res$results
+}
